@@ -1,0 +1,558 @@
+#include "mcc_generated_files/mcc.h"
+
+//#define Debug
+//#define DebugWrite
+//#define DebugRead
+#define DebugEeprom
+//#define firstTemp
+#define Adafruit
+#define Datalogger
+
+void i2c_init();
+void i2c_WriteSerial(int addr, uint8_t *data, int length);
+void i2c_temp(int addr);
+void i2c_ReadSerial(int addr, uint8_t *data, int length);
+void dataLogger_init();
+
+const uint8_t display_Addr = 0x3C;
+const uint8_t adafruit_Addr = 0x40;
+const uint8_t eeprom_Addr = 0x50;
+
+const uint8_t displayInit[] = {
+    0x00,
+    0x38,
+    0x0F,
+    0x06
+};
+const uint8_t clearDisplay[] = {
+    0x00,
+    0x01
+};
+
+uint8_t displayLine[2] = {
+    0x00,
+    0x00
+};
+uint8_t costum_char[2] = {
+    0x40,
+    0x00
+};
+
+#ifdef Adafruit
+const uint8_t tempText[] = "@Temp:";
+const uint8_t humiText[] = "@Humi:";
+const uint8_t degree_sign[] = {
+    0x80, 0x40, 0x40,
+    0b00110,
+    0b01001,
+    0b01001,
+    0b00110,
+    0b00000,
+    0b00000,
+    0b00000,
+    0b00000
+};
+const uint8_t procent_sign[] = {
+    0x80, 0x48, 0x40,
+    0b11000,
+    0b11001,
+    0b00010,
+    0b00100,
+    0b01000,
+    0b10011,
+    0b00011,
+    0b00000
+};
+const uint8_t adafruit_humi_command[] = { 0xE5 };
+const uint8_t adafruit_temp_command[] = { 0xE3 };
+int8_t tempRead[2];
+uint8_t humiRead[2];
+#endif
+
+#ifdef Datalogger
+const uint8_t testing[] = {
+    0x00,
+    0x00,
+    0xFF,
+    0xFF,
+    0xFF
+};
+const uint8_t sizePos[] = {
+    0x00,
+    0x00,
+    0x00,
+    0x03
+}; // The position of the size byte
+const uint8_t verifyPos[] = {
+    0x00,
+    0x02,
+    0x02
+}; // The position of the verify byte
+uint8_t pos[2]; // Save the position of the cursor
+uint8_t status[2] = {
+    0x00,
+    0x00
+}; // Save the last status
+uint8_t data[4]; // For sending data
+#endif
+
+#ifdef DebugWrite
+const uint8_t helloWorldString[] = "@Hello World";
+#endif
+
+#ifdef DebugEeprom
+//const uint8_t testWrite[] = {
+//        0x00, // Address High Byte
+//        0x00, // Address Low Byte
+//        
+//        // Data bytes... 0
+//        0x01,
+//        0x02,
+//        0x03,
+//        0x04,
+//        0x05,
+//        0x06,
+//        0x07,
+//        0x08,
+//        0x09,
+//        0x0A,
+//        0x0B,
+//        0x0C,
+//        0x0D,
+//        0X0E,
+//        0x0F
+//        // Data bytes... 15 (max 127)
+//    };
+//const uint8_t test[] = { 0x00, 0x00 };
+//uint8_t testRead[15];
+#endif
+
+//Main application
+void main(void)
+{
+    // Initialize the device
+    SYSTEM_Initialize();
+
+    // Enable the Global Interrupts
+    INTERRUPT_GlobalInterruptEnable();
+
+    // Disable the Global Interrupts
+    //INTERRUPT_GlobalInterruptDisable();
+
+    // Enable the Peripheral Interrupts
+    INTERRUPT_PeripheralInterruptEnable();
+
+    // Disable the Peripheral Interrupts
+    //INTERRUPT_PeripheralInterruptDisable();
+
+    EUSART1_Initialize();
+    __delay_ms(3000); // Delay 3 sek
+    
+    i2c_init(); // Initialize i2c
+    __delay_ms(3000); // Delay 3 sek
+    
+    dataLogger_init(); // Initialize data logger
+    
+#ifdef Adafruit
+    i2c_WriteSerial(display_Addr, procent_sign, 11); // Write to display
+    i2c_WriteSerial(display_Addr, degree_sign, 11); // Write to display
+#endif
+    
+    __delay_ms(3000); // Delay 3 sek
+    
+#ifdef Debug
+    printf("\n\rNew run \n\r");
+#endif
+    
+#ifdef DebugWrite
+    i2c_WriteSerial(display_Addr, helloWorldString, 12);
+#endif
+    
+#ifdef Debug
+    printf("while (1) \r\n");
+#endif
+
+#ifdef DebugEeprom
+//    i2c_WriteSerial(eeprom_Addr, testWrite, 17);
+//    i2c_WriteSerial(eeprom_Addr, test, 2);
+//    i2c_ReadSerial(eeprom_Addr, testRead, 15);
+//    
+//    printf("\r\n");
+//    for (int i = 0; i < sizeof(testRead); i++) {
+//        printf("testRead[]: %d \r\n", testRead[i]);
+//    }
+#endif
+    
+    while (1)
+    {
+        // Add your application code
+#ifdef Adafruit
+        i2c_WriteSerial(display_Addr, clearDisplay, 2); // Clear display
+        
+        // Start get humidity and calculate
+        i2c_WriteSerial(adafruit_Addr, adafruit_humi_command, 1); // Set Adafruit to humidity
+        i2c_ReadSerial(adafruit_Addr, humiRead, 2); // Get humidity from Adafruit
+        
+        float rh_code = ((humiRead[0] << 8) + humiRead[1]); // Combine 2 8 bit to a 16 bit
+        float rh = ((125 * rh_code) / 65536) - 6; // Calculate humidity
+        // End get humidity and calculate
+        
+        // Start write humidity to display
+        displayLine[1] = 0x80; // Set cursor hex for 1 position
+        i2c_WriteSerial(display_Addr, displayLine, 2); // Set cursor to 1 position first line
+        i2c_WriteSerial(display_Addr, humiText, 6); // Write to display
+        
+        displayLine[1] = 0x86; // Set cursor hex for 6 position
+        i2c_WriteSerial(display_Addr, displayLine, 2); // Set cursor to 6 position first line
+        
+        char outH[5];
+        sprintf(outH, "@%.1f", rh);
+        
+        i2c_WriteSerial(display_Addr, outH, sizeof(outH)); // Write to display
+        
+        costum_char[1] = 0x01;        
+        i2c_WriteSerial(display_Addr, costum_char, 2); // Percent sign        
+        // End write humidity to display
+        
+        // Start get temperature and calculate
+        i2c_WriteSerial(adafruit_Addr, adafruit_temp_command, 1); // Set Adafruit to temperature
+        i2c_ReadSerial(adafruit_Addr, tempRead, 2); // Get temperature from Adafruit
+        
+        float temp = ((175.72 * ((tempRead[0] << 8) + tempRead[1])) / 65536) - 46.85; // Combine 2 8 bit to a 16 bit & calculate temperature
+        // End get temperature and calculate
+        
+        // Start write temperature to display
+        displayLine[1] = 0xC0; // Set cursor hex for 1 position
+        i2c_WriteSerial(display_Addr, displayLine, 2); // Set cursor to 1 position second line
+        i2c_WriteSerial(display_Addr, tempText, 6); // Write to display
+        
+        displayLine[1] = 0xC6; // Set cursor hex for 6 position
+        i2c_WriteSerial(display_Addr, displayLine, 2); // Set cursor to 6 position second line
+        
+        char outT[5];
+        sprintf(outT, "@%.1f", temp);
+        
+        i2c_WriteSerial(display_Addr, outT, sizeof(outT)); // Write to display
+        
+        costum_char[1] = 0x00;        
+        i2c_WriteSerial(display_Addr, costum_char, 2); // Degree sign
+        // End write temperature to display
+        
+        __delay_ms(1000);
+        __delay_ms(1000);
+        __delay_ms(1000);
+#endif
+
+#ifdef Datalogger
+        printf("Start to log data\r\n");
+        
+        // Input of data, update size as the last thing, verify starts at 10 or 01 and 00 as incomplete. Data start from 0x03
+        
+        // Start set verify to incomplete
+        data[0] = verifyPos[0]; // verifyPos[] MSB
+        data[1] = verifyPos[1]; // verifyPos[] LSB
+        data[2] = status[1]; // 00
+        
+        i2c_WriteSerial(eeprom_Addr, data, 3); // Set verify to incomplete
+        __delay_ms(10);
+        // End set verify to incomplete
+        
+        // Start insert data on next position
+        data[0] = pos[0]; // pos[] MSB
+        data[1] = pos[1]; // pos[] LSB
+        data[2] = tempRead[0]; // tempRead[] MSB
+        data[3] = tempRead[1]; // tempRead[] LSB
+        
+        i2c_WriteSerial(eeprom_Addr, data, 4); // Insert data on next position
+        __delay_ms(10);
+        // End insert data on next position
+        
+        // Start update verify status
+        data[0] = verifyPos[0]; // verifyPos[] MSB
+        data[1] = verifyPos[1]; // verifyPos[] LSB
+        
+        if(status[0] == 0x01) {
+            status[0] = 0x02; // 10
+        }
+        else {
+            status[0] = 0x01; // 01
+        }
+        
+        data[2] = status[0]; // Status into temp variable
+        
+        i2c_WriteSerial(eeprom_Addr, data, 3); // Update verify status
+        __delay_ms(10);
+        // End update verify status
+        
+        // Start update size
+        data[0] = sizePos[0]; // sizePos[] MSB
+        data[1] = sizePos[1]; // sizePos[] LSB
+        
+        if ((pos[0] == 0x00) && ((pos[1] == 0x00) || (pos[0] == 0x01) || (pos[0] == 0x02))) {
+            pos[1] = 0x03; // Start position
+        }
+        else if ((pos[1] + 2) != 0xFF) {
+            pos[1] += 2; // Add 2 to position
+        }
+        else if (((pos[1] + 2) == 0xFF) && (pos[0] != 0xFF)) {
+            pos[0] += 1; // Add 2 to position
+            pos[1] = 0x00; // Start position
+        }
+        else if(((pos[1] + 2) == 0xFF) && (pos[0] == 0xFF)) {
+            pos[0] = 0x00; // Start position
+            pos[1] = 0x03; // Start position
+        }
+        
+        data[2] = pos[0]; // pos[] MSB
+        data[3] = pos[1]; // pos[] LSB
+        
+        i2c_WriteSerial(eeprom_Addr, data, 4); // Update size
+        __delay_ms(10);
+        // End update size
+        
+        printf("End to log data\r\n");
+        
+        printf("Start read data log");
+        i2c_WriteSerial(eeprom_Addr, data, 4); // 
+        for( int i = 4; i > 3; ++i) {
+            printf("Position size update data[%d]: %#2x \r\n", i, data[i]);
+        }
+        printf("End read data log");
+#endif
+        
+#ifdef Debug
+    printf("############################### \r\n");
+#endif
+    __delay_ms(3000); // Delay 3 sek
+    } // End of while
+} // End of method
+
+void i2c_init() {
+#ifdef Debug
+    printf("\r\nInit i2c \r\n");
+#endif
+    
+    TRISCbits.RC3 = 1;
+    TRISCbits.RC4 = 1;
+    
+    ANSELCbits.ANSC3 = 0;
+    ANSELCbits.ANSC4 = 0;
+    
+    uint8_t i2c_clock = (_XTAL_FREQ / (4 * 100000) - 1);
+    
+    SSP1ADD = i2c_clock;
+    SSP1CON1 = 0x28;
+    SSP1CON2 = 0;
+    
+    i2c_WriteSerial(display_Addr, displayInit, 4);
+} // End of method
+
+void i2c_WriteSerial(int addr, uint8_t *data, int length) {
+#ifdef Debug
+    printf("\r\nWrite \r\n");
+#endif
+    
+    while((SSP1STAT & 0x04) || (SSP1CON2 & 0x1F)); // Is the bus ideal
+    
+    SSP1CON2bits.SEN = 1;    
+    while(SSP1CON2bits.SEN == 1); // Start bit
+#ifdef DebugWrite
+    printf("SEN \r\n");
+#endif
+    
+    uint8_t targetAddr = (addr << 1); // Set address to write
+#ifdef DebugWrite
+    printf("Address: %#2x \r\n", addr);
+    printf("Target address: %#2x \r\n", targetAddr);
+#endif
+    
+    SSP1BUF = targetAddr; // Inset address to buffer
+    while(SSP1STATbits.R_nW); // Is the buffer ready
+#ifdef DebugWrite
+    printf("R_nW \r\n");
+#endif
+    
+    for (int i = 0; i < length; i++) {
+        // Slave is ready
+        if(SSP1CON2bits.ACKSTAT == 0) {
+#ifdef DebugWrite
+    printf("ACKSTAT \r\n");
+#endif
+    
+            SSP1BUF = (uint8_t) data[i];
+#ifdef DebugWrite
+    printf("BUF %#2x \r\n", SSP1BUF);
+#endif     
+    
+            while(SSP1STATbits.R_nW); // Is the buffer ready
+                
+#ifdef DebugWrite
+    printf("R_nW \r\n");
+#endif
+        } else {
+#ifdef DebugWrite
+    printf("!ACKSTAT \r\n");
+#endif        
+        } // End of if
+    } // End of for
+    
+    SSP1CON2bits.PEN = 1;
+    while(SSP1CON2bits.PEN == 1); // End bit
+#ifdef DebugWrite
+    printf("PEN \r\n");
+#endif
+} // End of method
+
+void i2c_ReadSerial(int addr, uint8_t *data, int length) {
+#ifdef Debug
+    printf("\r\nRead \r\n");
+#endif
+    
+    while((SSP1STAT & 0x04) || (SSP1CON2 & 0x1F)); // Is the bus ideal
+    
+    SSP1CON2bits.SEN = 1;    
+    while(SSP1CON2bits.SEN == 1); // Start bit
+#ifdef DebugRead
+    printf("SEN \r\n");
+#endif
+    
+    uint8_t targetAddr = (addr << 1) + 1; // Set address to read
+#ifdef DebugRead
+    printf("Address: %#2x \r\n", addr);
+    printf("Target address: %#2x \r\n", targetAddr);
+#endif
+    
+    SSP1BUF = targetAddr; // Inset address to buffer    
+    while(SSP1STATbits.R_nW); // Is the buffer ready
+#ifdef DebugRead
+    printf("R_nW \r\n");
+#endif
+            
+    // Slave is ready
+    if(SSP1CON2bits.ACKSTAT == 0) {
+#ifdef DebugRead
+    printf("ACKSTAT \r\n");
+#endif
+    
+        // Acknowledge after Byte ACK / NACK
+        for (int i = 0; i < length; i++) {            
+            SSP1CON2bits.RCEN = 1;
+            while(SSP1CON2bits.RCEN == 1); // Read
+#ifdef DebugRead
+    printf("RCEN \r\n");
+#endif            
+    
+            data[i] = SSP1BUF;
+#ifdef DebugRead
+    printf("BUF %#2x \r\n", SSP1BUF);
+#endif
+            
+            if (i != (length - 1)) {
+                SSP1CON2bits.ACKDT = 0; // ACK
+#ifdef DebugRead
+    printf("ACK \r\n");
+#endif
+            } else {
+                SSP1CON2bits.ACKDT = 1; // NACK
+#ifdef DebugRead
+    printf("NACK \r\n");
+#endif
+            } // End of if else
+            
+            SSP1CON2bits.ACKEN = 1;
+            while(SSP1CON2bits.ACKEN == 1); // Send acknowledge
+#ifdef DebugRead
+    printf("ACKEN \r\n");
+#endif
+        } // End of for
+        
+        SSP1CON2bits.PEN = 1;
+        while(SSP1CON2bits.PEN == 1); // End bit
+#ifdef DebugRead
+    printf("PEN \r\n");
+#endif
+    }
+    else {
+#ifdef DebugRead
+    printf("!ACKSTAT \r\n");
+#endif
+    } // End of if else
+} // End of method
+
+void dataLogger_init() {
+    __delay_ms(10);
+//    i2c_WriteSerial(eeprom_Addr, testing, 5);
+//    i2c_WriteSerial(eeprom_Addr, sizePos, 4); // Write 0x02 to size position
+//    __delay_ms(10);
+    
+#ifdef Debug
+    printf("\r\nInit datalogger \r\n");
+#endif
+    i2c_WriteSerial(eeprom_Addr, sizePos, 2); // Set cursor to size position
+    __delay_ms(10);
+    
+    i2c_ReadSerial(eeprom_Addr, pos, 2); // Read the bytes of size
+    __delay_ms(10);
+
+#ifdef DebugEeprom
+    printf("pos[0]: %#2x \r\n", pos[0]);
+    printf("pos[1]: %#2x \r\n", pos[1]);
+#endif      
+     // Check what pos[] is
+    if((pos[0] = 0x00) && (pos[1] >= 0x03)) {
+        // If the data is les than 0x02 it will set it to 0x02
+        // It can happen that it is a new eeprom
+        
+        printf("HELP!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
+        
+        i2c_WriteSerial(eeprom_Addr, sizePos, 4); // Write 0x03 to size position
+        __delay_ms(10);
+        
+        i2c_WriteSerial(eeprom_Addr, sizePos, 2); // Set cursor to size position
+        __delay_ms(10);
+        
+        i2c_ReadSerial(eeprom_Addr, pos, 2); // Read the byte of size
+        __delay_ms(10);
+    } // End of if
+
+#ifdef DebugEeprom
+    printf("pos[0]: %#2x \r\n", pos[0]);
+    printf("pos[1]: %#2x \r\n", pos[1]);
+#endif  
+    
+    i2c_WriteSerial(eeprom_Addr, verifyPos, 2); // Set cursor to verify position
+    __delay_ms(10);
+    
+    i2c_ReadSerial(eeprom_Addr, status, 1); // Read the byte of verify
+    __delay_ms(10);
+    
+#ifdef DebugEeprom
+    printf("status[0]: %#2x \r\n", status[0]);
+#endif
+    // Check if last job went well
+    if(status[0] == 0x02) {
+        // One of two completed states
+        // If the completed
+    }
+    else if (status[0] == 0x01) {
+        // Two of two completed states
+        // If the completed
+    }
+    else {
+        // If it's a new eeprom or the last didn't complete
+        
+        i2c_WriteSerial(eeprom_Addr, verifyPos, 3); // Write 0x02 to verify position
+        __delay_ms(10);
+        
+        i2c_WriteSerial(eeprom_Addr, verifyPos, 2); // Set cursor to verify position
+        __delay_ms(10);
+        
+        i2c_ReadSerial(eeprom_Addr, status, 1); // Read the byte of verify
+        __delay_ms(10);
+    } // End of if else if else
+#ifdef DebugEeprom
+    printf("status[0]: %#2x \r\n", status[0]);
+#endif    
+} // End of method
+
+// End of File
