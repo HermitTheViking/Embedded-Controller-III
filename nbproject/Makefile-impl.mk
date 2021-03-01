@@ -24,7 +24,7 @@ CLEAN_SUBPROJECTS=${CLEAN_SUBPROJECTS_${SUBPROJECTS}}
 
 
 # Project Name
-PROJECTNAME=display.X
+PROJECTNAME=Embedded-Controller-III
 
 # Active Configuration
 DEFAULTCONF=default

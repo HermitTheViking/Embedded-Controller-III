@@ -20,6 +20,7 @@ typedef enum {
     EV_INITOK,
     EV_MODEOK,
     EV_DHCPOK,
+    EV_CONNOK,
     EV_MAXCONNOK,
     EV_SERVEROK,
     EV_ERROR,

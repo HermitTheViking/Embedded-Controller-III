@@ -3,6 +3,7 @@
 #include <stdio.h>
 
 #include "StateMachine.h"
+#include "wifiModule.h"
 #include "i2c.h"
 #include "Datalogger.h"
 
@@ -29,7 +30,9 @@ void adafruit();
 
 uint8_t index = 0;
 char stringArry[64];
+char oldStringArry[64];
 
+#ifdef Display
 const uint8_t displayAddr = 0x3C;
 const uint8_t displayInit[] = {
     0x00,
@@ -41,6 +44,16 @@ const uint8_t clearDisplay[] = {
     0x00,
     0x01
 };
+uint8_t displayLine[2] = {
+    0x00,
+    0x00
+};
+uint8_t costumChar[2] = {
+    0x40,
+    0x00
+};
+#endif
+#ifdef Adafruit
 const uint8_t degree_sign[] = {
     0x80, 0x40, 0x40,
     0b00110,
@@ -72,58 +85,93 @@ const uint8_t adafruit_temp_command[] = {0xE3};
 
 int8_t tempRead[2];
 uint8_t humiRead[2];
-uint8_t displayLine[2] = {
-    0x00,
-    0x00
-};
-uint8_t costumChar[2] = {
-    0x40,
-    0x00
-};
+#endif
 
 //Main application
+
 void main(void) {
     SYSTEM_Initialize(); // Initialize the device
 
     INTERRUPT_GlobalInterruptEnable(); // Enable the Global Interrupts
-
     //INTERRUPT_GlobalInterruptDisable(); // Disable the Global Interrupts
-
     INTERRUPT_PeripheralInterruptEnable(); // Enable the Peripheral Interrupts
-
     //INTERRUPT_PeripheralInterruptDisable(); // Disable the Peripheral Interrupts
 
     EUSART1_Initialize();
-    
+
+#ifdef Display
     i2c_display_init(); // Initialize display with i2c
+#endif    
+#ifdef Adafruit
     TMR2_Initialize();
     adafruit_init(); // Initialize adafruit
-    
+#endif    
+#ifdef Datalogger
     TMR4_Initialize();
     TMR6_Initialize();
     dataLogger_init(); // Initialize data logger
+#endif
 
     __delay_ms(3000); // Delay 3 seconds
 
+#ifdef Adafruit
     TMR2_SetInterruptHandler(adafruit);
+#endif
+#ifdef Datalogger
     TMR4_SetInterruptHandler(dataLogRead);
     TMR6_SetInterruptHandler(dataLogWrite);
-    
+    TMR4_StopTimer();
+#endif    
 #ifdef WifiModule
     stateMachine_t stateMachine;
     StateMachine_Init(&stateMachine);
-//    printf("State is now %s.\r\n", StateMachine_GetStateName(stateMachine.currState));
-    
-    StateMachine_RunIteration(&stateMachine, EV_INITOK);
-//    printf("State is now %s.\r\n", StateMachine_GetStateName(stateMachine.currState));
 #endif
 
+    wifiModule_init();
+    
     while (1) {
         if (EUSART1_is_rx_ready) {
             uint8_t tmp = EUSART1_Read();
-            
+
+#ifdef WifiModule
             if ((tmp == 10 || tmp == 13) && (index <= 64)) {
+                index = 0;
+
+                if (!strncmp(stringArry, "OK", 2)) {
+                    if (!strncmp(oldStringArry, "AT+CWMODE_CUR=3", 15)) {
+                        StateMachine_RunIteration(&stateMachine, EV_MODEOK);
+                    } else if (!strncmp(oldStringArry, "AT+CWDHCP_CUR=1,1", 17)) {
+                        StateMachine_RunIteration(&stateMachine, EV_DHCPOK);
+                    } else if (!strncmp(oldStringArry, "AT+CWJAP_CUR=\"dummy\",\"GtLDPU43\"", 31)) {
+                        StateMachine_RunIteration(&stateMachine, EV_CONNOK); //TODO: Make fix for no control connected or IP
+                    } else if (!strncmp(oldStringArry, "AT+CIPMUX=1", 11)) {
+                        StateMachine_RunIteration(&stateMachine, EV_MAXCONNOK);
+                    } else if (!strncmp(oldStringArry, "AT+CIPSERVER=1,8080", 19)) {
+                        StateMachine_RunIteration(&stateMachine, EV_SERVEROK);
+                    } else if (!strncmp(oldStringArry, "AT", 2)) {
+                        StateMachine_RunIteration(&stateMachine, EV_INITOK);
+                    }
+                } else if (!strncmp(stringArry, "WIFI DISCONNECT", 15)) { }
+                else if (!strncmp(stringArry, "WIFI CONNECTED", 14)) { }
+                else if (!strncmp(stringArry, "WIFI GOT IP", 11)) { }
+                else if (strncmp(stringArry, "", 2)) {
+                    strcpy(oldStringArry, stringArry);
+                } else if (!strncmp(stringArry, "", 2)) { }
+                else {
+                    printf("Hello stringArry, %s \r\n", stringArry);
+                }
+
+                memset(stringArry, 0, sizeof (stringArry));
+            } else if (index >= 65) {
+                index--;
+            } else {
+                stringArry[index] = tmp;
+                index++;
+            }
+#endif
+
 #ifdef Datalogger
+            if ((tmp == 10 || tmp == 13) && (index <= 64)) {
                 index = 0;
 
                 if (!strncmp(stringArry, "start", 4)) {
@@ -137,7 +185,6 @@ void main(void) {
                 }
 
                 memset(stringArry, 0, sizeof (stringArry));
-#endif
             } else if (index >= 65) {
                 index--;
             } else {
@@ -145,6 +192,7 @@ void main(void) {
                 index++;
                 stringArry[index] = 0x00;
             }
+#endif
         }
     } // End of while
 } // End of function
@@ -161,7 +209,7 @@ void i2c_display_init() {
     SSP1ADD = i2c_clock;
     SSP1CON1 = 0x28;
     SSP1CON2 = 0;
-    
+
     i2c_WriteSerial(displayAddr, displayInit, 4);
 } // End of function
 
@@ -170,7 +218,7 @@ void adafruit_init() {
     i2c_WriteSerial(displayAddr, degree_sign, 11); // Write custom charator to display ram
 } // End of function
 
-void adafruit() {    
+void adafruit() {
     i2c_WriteSerial(displayAddr, clearDisplay, 2); // Clear display
 
     // Start get humidity and calculate

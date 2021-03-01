@@ -34,7 +34,7 @@ static stateTransMatrixRow_t stateTransMatrix[] = {
     { ST_INIT, EV_INITOK, ST_MODE},
     { ST_MODE, EV_MODEOK, ST_DHCP},
     { ST_DHCP, EV_DHCPOK, ST_CONN},
-    { ST_CONN, EV_GOTIP, ST_MAXCONN},
+    { ST_CONN, EV_CONNOK, ST_MAXCONN},
     { ST_MAXCONN, EV_MAXCONNOK, ST_TCPSERVER},
     { ST_TCPSERVER, EV_SERVEROK, ST_MODE}
 };
@@ -50,11 +50,11 @@ void StateMachine_RunIteration(stateMachine_t *stateMachine, event_t event) {
     for (int i = 0; i < sizeof (stateTransMatrix) / sizeof (stateTransMatrix[0]); i++) {
         if (stateTransMatrix[i].currState == stateMachine->currState) {
             if ((stateTransMatrix[i].event == event)) { // || (stateTransMatrix[i].event == EV_ANY)
-                // Call the function associated with transition
-                (stateFunctionA[stateMachine->currState].func)();
-
                 // Transition to the next state
                 stateMachine->currState = stateTransMatrix[i].nextState;
+                
+                // Call the function associated with transition
+                (stateFunctionA[stateMachine->currState].func)();
                 break;
             }
         }
