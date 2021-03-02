@@ -1,16 +1,29 @@
 #include "mcc_generated_files/mcc.h"
 #include <string.h>
+#include <stdbool.h>
 #include <stdio.h>
 
-#include "StateMachine.h"
-#include "wifiModule.h"
-#include "i2c.h"
-#include "Datalogger.h"
-
 #define Display
-#define Adafruit
+//#define Adafruit
 //#define Datalogger
 #define WifiModule
+
+#include "i2c.h"
+#ifdef Display
+void i2c_display_init();
+#endif
+#ifdef Adafruit
+#include "Adafruit.h"
+void adafruit_init();
+void adafruit();
+#endif
+#ifdef Datalogger
+#include "Datalogger.h"
+#endif
+#ifdef WifiModule
+#include "StateMachine.h"
+#include "WifiModule.h"
+#endif
 
 /*
  * Adafruit is being called every 1 second
@@ -24,13 +37,8 @@
  * 8. Start reading from the start (0x03) and increment by 4 every time. It takes 4 bytes every time and converts them to temperature decimal and prints them out.
  */
 
-void i2c_display_init();
-void adafruit_init();
-void adafruit();
-
 uint8_t index = 0;
 char stringArry[64];
-char oldStringArry[64];
 
 #ifdef Display
 const uint8_t displayAddr = 0x3C;
@@ -78,13 +86,11 @@ const uint8_t procent_sign[] = {
 };
 const uint8_t tempText[] = "@Temp:";
 const uint8_t humiText[] = "@Humi:";
-
-const uint8_t adafruit_Addr = 0x40;
-const uint8_t adafruit_humi_command[] = {0xE5};
-const uint8_t adafruit_temp_command[] = {0xE3};
-
-int8_t tempRead[2];
-uint8_t humiRead[2];
+#endif
+#ifdef WifiModule
+char oldStringArry[64];
+bool wifiConnected = false;
+bool gotIp = false;
 #endif
 
 //Main application
@@ -125,55 +131,55 @@ void main(void) {
 #ifdef WifiModule
     stateMachine_t stateMachine;
     StateMachine_Init(&stateMachine);
+    wifiModule_init();
 #endif
 
-    wifiModule_init();
-    
     while (1) {
         if (EUSART1_is_rx_ready) {
             uint8_t tmp = EUSART1_Read();
-
-#ifdef WifiModule
             if ((tmp == 10 || tmp == 13) && (index <= 64)) {
                 index = 0;
 
+#ifdef WifiModule
                 if (!strncmp(stringArry, "OK", 2)) {
+                    i2c_WriteSerial(displayAddr, clearDisplay, 2); // Clear display
+
+                    displayLine[1] = 0x86; // Set cursor hex for 1 position
+                    i2c_WriteSerial(displayAddr, displayLine, 2); // Set cursor to 6 position second line
+
                     if (!strncmp(oldStringArry, "AT+CWMODE_CUR=3", 15)) {
+                        i2c_WriteSerial(displayAddr, "CWMODE", 6); // Write to display
                         StateMachine_RunIteration(&stateMachine, EV_MODEOK);
                     } else if (!strncmp(oldStringArry, "AT+CWDHCP_CUR=1,1", 17)) {
+                        i2c_WriteSerial(displayAddr, "CWDHCP", 6); // Write to display
                         StateMachine_RunIteration(&stateMachine, EV_DHCPOK);
-                    } else if (!strncmp(oldStringArry, "AT+CWJAP_CUR=\"dummy\",\"GtLDPU43\"", 31)) {
+                    } else if (!strncmp(oldStringArry, "AT+CWJAP_CUR=\"WuggaNet\",\"FredagsBanan\"", 31)) {
+                        i2c_WriteSerial(displayAddr, "CWJAP", 5); // Write to display       
                         StateMachine_RunIteration(&stateMachine, EV_CONNOK); //TODO: Make fix for no control connected or IP
                     } else if (!strncmp(oldStringArry, "AT+CIPMUX=1", 11)) {
+                        i2c_WriteSerial(displayAddr, "CIPMUX", 6); // Write to display       
                         StateMachine_RunIteration(&stateMachine, EV_MAXCONNOK);
-                    } else if (!strncmp(oldStringArry, "AT+CIPSERVER=1,8080", 19)) {
+                    } else if (!strncmp(oldStringArry, "AT+CIPSERVER=1,80", 17)) {
+                        i2c_WriteSerial(displayAddr, "CIPSERVER", 9); // Write to display       
                         StateMachine_RunIteration(&stateMachine, EV_SERVEROK);
                     } else if (!strncmp(oldStringArry, "AT", 2)) {
+                        i2c_WriteSerial(displayAddr, "AT", 2); // Write to display       
                         StateMachine_RunIteration(&stateMachine, EV_INITOK);
                     }
-                } else if (!strncmp(stringArry, "WIFI DISCONNECT", 15)) { }
-                else if (!strncmp(stringArry, "WIFI CONNECTED", 14)) { }
-                else if (!strncmp(stringArry, "WIFI GOT IP", 11)) { }
+                } else if (!strncmp(stringArry, "WIFI DISCONNECT", 15)) {
+                    wifiConnected = false;
+                    gotIp = false;
+                } else if (!strncmp(stringArry, "WIFI CONNECTED", 14)) {
+                    wifiConnected = true;
+                } else if (!strncmp(stringArry, "WIFI GOT IP", 11)) {
+                    gotIp = true;
+                } else if (!strncmp(stringArry, "no change", 9)) { }
                 else if (strncmp(stringArry, "", 2)) {
                     strcpy(oldStringArry, stringArry);
                 } else if (!strncmp(stringArry, "", 2)) { }
-                else {
-                    printf("Hello stringArry, %s \r\n", stringArry);
-                }
-
-                memset(stringArry, 0, sizeof (stringArry));
-            } else if (index >= 65) {
-                index--;
-            } else {
-                stringArry[index] = tmp;
-                index++;
-            }
 #endif
 
 #ifdef Datalogger
-            if ((tmp == 10 || tmp == 13) && (index <= 64)) {
-                index = 0;
-
                 if (!strncmp(stringArry, "start", 4)) {
                     printf("Start timer \r\n");
                     TMR4_StartTimer();
@@ -183,7 +189,7 @@ void main(void) {
                 } else {
                     printf("%s, did not match a command \n\r", stringArry);
                 }
-
+#endif
                 memset(stringArry, 0, sizeof (stringArry));
             } else if (index >= 65) {
                 index--;
@@ -192,11 +198,11 @@ void main(void) {
                 index++;
                 stringArry[index] = 0x00;
             }
-#endif
         }
     } // End of while
 } // End of function
 
+#ifdef Display
 void i2c_display_init() {
     TRISCbits.RC3 = 1;
     TRISCbits.RC4 = 1;
@@ -212,7 +218,9 @@ void i2c_display_init() {
 
     i2c_WriteSerial(displayAddr, displayInit, 4);
 } // End of function
+#endif
 
+#ifdef Adafruit
 void adafruit_init() {
     i2c_WriteSerial(displayAddr, procent_sign, 11); // Write custom charator to display ram
     i2c_WriteSerial(displayAddr, degree_sign, 11); // Write custom charator to display ram
@@ -220,14 +228,6 @@ void adafruit_init() {
 
 void adafruit() {
     i2c_WriteSerial(displayAddr, clearDisplay, 2); // Clear display
-
-    // Start get humidity and calculate
-    i2c_WriteSerial(adafruit_Addr, adafruit_humi_command, 1); // Set Adafruit to humidity
-    i2c_ReadSerial(adafruit_Addr, humiRead, 2); // Get humidity from Adafruit
-
-    float rh_code = ((humiRead[0] << 8) + humiRead[1]); // Combine 2 8 bit to a 16 bit
-    float rh = ((125 * rh_code) / 65536) - 6; // Calculate humidity
-    // End get humidity and calculate
 
     // Start write humidity to display
     displayLine[1] = 0x80; // Set cursor hex for 1 position
@@ -238,20 +238,12 @@ void adafruit() {
     i2c_WriteSerial(displayAddr, displayLine, 2); // Set cursor to 6 position first line
 
     char outH[5];
-    sprintf(outH, "@%.1f", rh);
-
+    sprintf(outH, "@%.1f", GetHumi());
     i2c_WriteSerial(displayAddr, outH, sizeof (outH)); // Write to display
 
     costumChar[1] = 0x01;
     i2c_WriteSerial(displayAddr, costumChar, 2); // Percent sign        
     // End write humidity to display
-
-    // Start get temperature and calculate
-    i2c_WriteSerial(adafruit_Addr, adafruit_temp_command, 1); // Set Adafruit to temperature
-    i2c_ReadSerial(adafruit_Addr, tempRead, 2); // Get temperature from Adafruit
-
-    float temp = ((175.72 * ((tempRead[0] << 8) + tempRead[1])) / 65536) - 46.85; // Combine 2 8 bit to a 16 bit & calculate temperature
-    // End get temperature and calculate
 
     // Start write temperature to display
     displayLine[1] = 0xC0; // Set cursor hex for 1 position
@@ -262,12 +254,12 @@ void adafruit() {
     i2c_WriteSerial(displayAddr, displayLine, 2); // Set cursor to 6 position second line
 
     char outT[5];
-    sprintf(outT, "@%.1f", temp);
-
+    sprintf(outT, "@%.1f", GetTemp());
     i2c_WriteSerial(displayAddr, outT, sizeof (outT)); // Write to display
 
     costumChar[1] = 0x00;
     i2c_WriteSerial(displayAddr, costumChar, 2); // Degree sign
     // End write temperature to display
 } // End of function
+#endif
 // End of File

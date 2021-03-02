@@ -3,6 +3,8 @@
 #include <stdio.h>
 
 void wifiModule_init() {
+    printf("AT+CIPSERVER=0\r\n");
+    __delay_ms(1000); // Delay 1 seconds
     printf("AT\r\n");
     __delay_ms(1000); // Delay 1 seconds
 } // End of function
@@ -18,7 +20,7 @@ void wifiModule_dhcp() {
 } // End of function
 
 void wifiModule_conn() {
-    printf("AT+CWJAP_CUR=\"dummy\",\"GtLDPU43\"\r\n");
+    printf("AT+CWJAP_CUR=\"WuggaNet\",\"FredagsBanan\"\r\n");
     __delay_ms(1000); // Delay 1 seconds
 } // End of function
 
@@ -28,6 +30,6 @@ void wifiModule_maxconn() {
 } // End of function
 
 void wifiModule_server() {
-    printf("AT+CIPSERVER=1,8080\r\n");
+    printf("AT+CIPSERVER=1,80\r\n");
     __delay_ms(1000); // Delay 1 seconds
 } // End of function
