@@ -7,5 +7,6 @@ void wifiModule_dhcp();
 void wifiModule_conn();
 void wifiModule_maxconn();
 void wifiModule_server();
+void wifiModule_getip();
 
 #endif	/* WIFIMODULE_H */

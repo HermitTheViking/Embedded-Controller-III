@@ -7,7 +7,8 @@ typedef enum {
     ST_DHCP,
     ST_CONN,
     ST_MAXCONN,
-    ST_TCPSERVER
+    ST_TCPSERVER,
+    ST_GETIP
 } state_t;
 
 typedef struct {
@@ -23,6 +24,7 @@ typedef enum {
     EV_CONNOK,
     EV_MAXCONNOK,
     EV_SERVEROK,
+    EV_GETIPOK,
     EV_ERROR,
     EV_GOTIP,
     EV_CONNECTED,
@@ -32,6 +34,5 @@ typedef enum {
 
 void StateMachine_Init(stateMachine_t * stateMachine);
 void StateMachine_RunIteration(stateMachine_t *stateMachine, event_t event);
-const char * StateMachine_GetStateName(state_t state);
 
 #endif

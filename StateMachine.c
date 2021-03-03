@@ -21,6 +21,7 @@ static stateFunctionRow_t stateFunctionA[] = {
     { "ST_CONN", &wifiModule_conn},
     { "ST_MAXCONN", &wifiModule_maxconn},
     { "ST_TCPSERVER", &wifiModule_server},
+    { "ST_GETIP", &wifiModule_getip},
 };
 
 typedef struct {
@@ -36,7 +37,8 @@ static stateTransMatrixRow_t stateTransMatrix[] = {
     { ST_DHCP, EV_DHCPOK, ST_CONN},
     { ST_CONN, EV_CONNOK, ST_MAXCONN},
     { ST_MAXCONN, EV_MAXCONNOK, ST_TCPSERVER},
-    { ST_TCPSERVER, EV_SERVEROK, ST_MODE}
+    { ST_TCPSERVER, EV_SERVEROK, ST_GETIP},
+    { ST_GETIP, EV_GETIPOK, ST_CONN}
 };
 
 void StateMachine_Init(stateMachine_t * stateMachine) {
@@ -59,8 +61,4 @@ void StateMachine_RunIteration(stateMachine_t *stateMachine, event_t event) {
             }
         }
     }
-}
-
-const char * StateMachine_GetStateName(state_t state) {
-    return stateFunctionA[state].name;
 }

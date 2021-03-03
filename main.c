@@ -89,6 +89,7 @@ const uint8_t humiText[] = "@Humi:";
 #endif
 #ifdef WifiModule
 char oldStringArry[64];
+char ipStringArry[64];
 bool wifiConnected = false;
 bool gotIp = false;
 #endif
@@ -139,46 +140,56 @@ void main(void) {
             uint8_t tmp = EUSART1_Read();
             if ((tmp == 10 || tmp == 13) && (index <= 64)) {
                 index = 0;
-
 #ifdef WifiModule
                 if (!strncmp(stringArry, "OK", 2)) {
-                    i2c_WriteSerial(displayAddr, clearDisplay, 2); // Clear display
-
-                    displayLine[1] = 0x86; // Set cursor hex for 1 position
-                    i2c_WriteSerial(displayAddr, displayLine, 2); // Set cursor to 6 position second line
-
-                    if (!strncmp(oldStringArry, "AT+CWMODE_CUR=3", 15)) {
-                        i2c_WriteSerial(displayAddr, "CWMODE", 6); // Write to display
+                    if (!strncmp(oldStringArry, "AT+CWMODE_CUR=1", 15) && !wifiConnected && !gotIp) {
                         StateMachine_RunIteration(&stateMachine, EV_MODEOK);
-                    } else if (!strncmp(oldStringArry, "AT+CWDHCP_CUR=1,1", 17)) {
-                        i2c_WriteSerial(displayAddr, "CWDHCP", 6); // Write to display
+                    } else if (!strncmp(oldStringArry, "AT+CWDHCP_CUR=1,1", 17) && !wifiConnected && !gotIp) {
                         StateMachine_RunIteration(&stateMachine, EV_DHCPOK);
-                    } else if (!strncmp(oldStringArry, "AT+CWJAP_CUR=\"WuggaNet\",\"FredagsBanan\"", 31)) {
-                        i2c_WriteSerial(displayAddr, "CWJAP", 5); // Write to display       
+                    } else if (!strncmp(oldStringArry, "AT+CWJAP_CUR=\"WuggaNet\",\"FredagsBanan\"", 31) && wifiConnected && gotIp) {
                         StateMachine_RunIteration(&stateMachine, EV_CONNOK); //TODO: Make fix for no control connected or IP
-                    } else if (!strncmp(oldStringArry, "AT+CIPMUX=1", 11)) {
-                        i2c_WriteSerial(displayAddr, "CIPMUX", 6); // Write to display       
+                    } else if (!strncmp(oldStringArry, "AT+CIPMUX=1", 11) && wifiConnected && gotIp) {
                         StateMachine_RunIteration(&stateMachine, EV_MAXCONNOK);
-                    } else if (!strncmp(oldStringArry, "AT+CIPSERVER=1,80", 17)) {
-                        i2c_WriteSerial(displayAddr, "CIPSERVER", 9); // Write to display       
+                    } else if (!strncmp(oldStringArry, "AT+CIPSERVER=1,80", 17) && wifiConnected && gotIp) {
                         StateMachine_RunIteration(&stateMachine, EV_SERVEROK);
-                    } else if (!strncmp(oldStringArry, "AT", 2)) {
-                        i2c_WriteSerial(displayAddr, "AT", 2); // Write to display       
+                    } else if (!strncmp(oldStringArry, "AT+CIFSR", 8) && wifiConnected && gotIp) {
+                        StateMachine_RunIteration(&stateMachine, EV_GETIPOK);
+                    } else if (!strncmp(oldStringArry, "AT", 2) && !wifiConnected && !gotIp) {
                         StateMachine_RunIteration(&stateMachine, EV_INITOK);
                     }
-                } else if (!strncmp(stringArry, "WIFI DISCONNECT", 15)) {
+                } else if (!strncmp(stringArry, "AT", 2)
+                        || !strncmp(stringArry, "AT+CWMODE_CUR", 13)
+                        || !strncmp(stringArry, "AT+CWDHCP_CUR", 13)
+                        || !strncmp(stringArry, "AT+CWJAP_CUR", 12)
+                        || !strncmp(stringArry, "AT+CIPMUX", 9)
+                        || !strncmp(stringArry, "AT+CIPSERVER", 12)
+                        || !strncmp(stringArry, "AT+CIFSR", 8)) {
+                    strcpy(oldStringArry, stringArry);
+                } else if (!strncmp(stringArry, "+CIFSR:STAIP,\"", 14) && wifiConnected && gotIp) {
+                    i2c_WriteSerial(displayAddr, clearDisplay, 2); // Clear display
+
+                    displayLine[1] = 0x80; // Set cursor hex for 1 position
+                    i2c_WriteSerial(displayAddr, displayLine, 2); // Set cursor to 1 position first line
+                    i2c_WriteSerial(displayAddr, "@Hello", 6); // Write to display
+                    
+                    strncpy ( ipStringArry, stringArry+strlen("+CIFSR:STAIP,\""), strlen("+CIFSR:STAIP,\"") + 1);
+                    ipStringArry[strlen("+CIFSR:STAIP,\"") + 1] = '\0';
+                    
+                    printf("%s\n\r", ipStringArry);
+                }
+                
+                if (!strncmp(stringArry, "WIFI DISCONNECT", 15)) {
                     wifiConnected = false;
                     gotIp = false;
                 } else if (!strncmp(stringArry, "WIFI CONNECTED", 14)) {
                     wifiConnected = true;
-                } else if (!strncmp(stringArry, "WIFI GOT IP", 11)) {
+                    gotIp = false;
+                }
+                
+                if (!strncmp(stringArry, "WIFI GOT IP", 11)) {
                     gotIp = true;
-                } else if (!strncmp(stringArry, "no change", 9)) { }
-                else if (strncmp(stringArry, "", 2)) {
-                    strcpy(oldStringArry, stringArry);
-                } else if (!strncmp(stringArry, "", 2)) { }
+                }
 #endif
-
 #ifdef Datalogger
                 if (!strncmp(stringArry, "start", 4)) {
                     printf("Start timer \r\n");

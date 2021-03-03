@@ -10,7 +10,7 @@ void wifiModule_init() {
 } // End of function
 
 void wifiModule_mode() {
-    printf("AT+CWMODE_CUR=3\r\n");
+    printf("AT+CWMODE_CUR=1\r\n");
     __delay_ms(1000); // Delay 1 seconds
 } // End of function
 
@@ -31,5 +31,10 @@ void wifiModule_maxconn() {
 
 void wifiModule_server() {
     printf("AT+CIPSERVER=1,80\r\n");
+    __delay_ms(1000); // Delay 1 seconds
+} // End of function
+
+void wifiModule_getip() {
+    printf("AT+CIFSR\r\n");
     __delay_ms(1000); // Delay 1 seconds
 } // End of function
