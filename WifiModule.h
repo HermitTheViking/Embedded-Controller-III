@@ -2,11 +2,11 @@
 #define	WIFIMODULE_H
 
 void wifiModule_init();
-void wifiModule_mode();
-void wifiModule_dhcp();
-void wifiModule_conn();
-void wifiModule_maxconn();
-void wifiModule_server();
-void wifiModule_getip();
+void SetApMode();
+void SetupDhcp();
+void ConnToAp();
+void SetMaxConn();
+void SetupServer();
+void Getip();
 
 #endif	/* WIFIMODULE_H */

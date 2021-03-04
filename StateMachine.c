@@ -10,18 +10,15 @@ typedef struct {
     void (*func)(void);
 } stateFunctionRow_t;
 
-/// \brief  Maps a state to it's state transition function, which should be called
-///         when the state transitions into this state.
-/// \warning    This has to stay in sync with the state_t enum!
 static stateFunctionRow_t stateFunctionA[] = {
     // NAME         // FUNC
     { "ST_INIT", &wifiModule_init},
-    { "ST_MODE", &wifiModule_mode},
-    { "ST_DHCP", &wifiModule_dhcp},
-    { "ST_CONN", &wifiModule_conn},
-    { "ST_MAXCONN", &wifiModule_maxconn},
-    { "ST_TCPSERVER", &wifiModule_server},
-    { "ST_GETIP", &wifiModule_getip},
+    { "ST_MODE", &SetApMode},
+    { "ST_DHCP", &SetupDhcp},
+    { "ST_CONN", &ConnToAp},
+    { "ST_MAXCONN", &SetMaxConn},
+    { "ST_TCPSERVER", &SetupServer},
+    { "ST_GETIP", &Getip},
 };
 
 typedef struct {
@@ -42,13 +39,10 @@ static stateTransMatrixRow_t stateTransMatrix[] = {
 };
 
 void StateMachine_Init(stateMachine_t * stateMachine) {
-    //    printf("Initialising state machine.\r\n");
     stateMachine->currState = ST_INIT;
 }
 
 void StateMachine_RunIteration(stateMachine_t *stateMachine, event_t event) {
-    // Iterate through the state transition matrix, checking if there is both a match with the current state
-    // and the event
     for (int i = 0; i < sizeof (stateTransMatrix) / sizeof (stateTransMatrix[0]); i++) {
         if (stateTransMatrix[i].currState == stateMachine->currState) {
             if ((stateTransMatrix[i].event == event)) { // || (stateTransMatrix[i].event == EV_ANY)
