@@ -92,7 +92,7 @@ char oldStringArry[64];
 char ipStringArry[64];
 bool wifiConnected = false;
 bool gotIp = false;
-const uint8_t htmlText[] = "<!DOCTYPE html><html><head><title>Page Title</title></head><body><h1>This is a Heading</h1><p>This is a paragraph.</p></body></html>";
+const uint8_t htmlText[] = "@<!DOCTYPE html><html><head><title>Page Title</title></head><body><h1>Temperature</h1><p>0</p><br/><h1>Humidity</h1><p>0</p></body></html>";
 #endif
 
 //Main application
@@ -112,7 +112,7 @@ void main(void) {
 #endif    
 #ifdef Adafruit
     TMR2_Initialize();
-    adafruit_init(); // Initialize adafruit
+//    adafruit_init(); // Initialize adafruit
 #endif    
 #ifdef Datalogger
     TMR4_Initialize();
@@ -191,15 +191,7 @@ void main(void) {
                     //                    ipStringArry[15] = '\0';
                 }
 
-                if (!strncmp(stringArry, "+IPD,0,464:GET", 14) && wifiConnected && gotIp) {
-//                    int counter;
-//                    while (htmlText[counter] != '\0') {
-//                        if (htmlText[counter] == 'a') {
-//                            htmlText[counter] = '*';
-//                        }
-//                        counter++;
-//                    }
-
+                if (!strncmp(stringArry, "+IPD", 4) && wifiConnected && gotIp) {
                     printf("AT+CIPSEND=0,%d\r\n", sizeof (htmlText));
                     __delay_ms(1000); // Delay 1 seconds
                     printf("%s\n", htmlText);
